@@ -1,22 +1,20 @@
-import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from 'react'
+import { Alert, Text, View, BackHandler } from 'react-native'
 
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from '@react-navigation/native'
 
-import { styles } from "./styles";
+import { styles } from './styles'
 
-import { QUIZ } from "../../data/quiz";
-import { historyAdd } from "../../storage/quizHistoryStorage";
+import { QUIZ } from '../../data/quiz'
+import { historyAdd } from '../../storage/quizHistoryStorage'
 
-import { Loading } from "../../components/Loading";
-import { Question } from "../../components/Question";
-import { QuizHeader } from "../../components/QuizHeader";
-import { ConfirmButton } from "../../components/ConfirmButton";
-import { OutlineButton } from "../../components/OutlineButton";
+import { Loading } from '../../components/Loading'
+import { Question } from '../../components/Question'
+import { QuizHeader } from '../../components/QuizHeader'
+import { ConfirmButton } from '../../components/ConfirmButton'
+import { OutlineButton } from '../../components/OutlineButton'
 import Animated, {
-  Easing,
   Extrapolate,
-  event,
   interpolate,
   runOnJS,
   useAnimatedScrollHandler,
@@ -24,43 +22,62 @@ import Animated, {
   useSharedValue,
   withSequence,
   withTiming,
-} from "react-native-reanimated";
-import { ProgressBar } from "../../components/ProgressBar";
-import { THEME } from "../../styles/theme";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+} from 'react-native-reanimated'
+import { ProgressBar } from '../../components/ProgressBar'
+import { THEME } from '../../styles/theme'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { OverlayFeedback } from '../../components/OverlayFeedback'
+
+import { Audio } from 'expo-av'
+import * as Haptics from 'expo-haptics'
 
 interface Params {
-  id: string;
+  id: string
 }
 
-type QuizProps = typeof QUIZ[0];
+type QuizProps = (typeof QUIZ)[0]
 
-const CARD_INCLINATION = 10;
-const CARD_SKIP_AREA = -200;
+const CARD_INCLINATION = 10
+const CARD_SKIP_AREA = -200
 
 export function Quiz() {
-  const [points, setPoints] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [quiz, setQuiz] = useState<QuizProps>({} as QuizProps);
+  const [points, setPoints] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [currentQuestion, setCurrentQuestion] = useState(0)
+  const [quiz, setQuiz] = useState<QuizProps>({} as QuizProps)
   const [alternativeSelected, setAlternativeSelected] = useState<null | number>(
-    null
-  );
+    null,
+  )
 
-  const shake = useSharedValue(0);
-  const scrollY = useSharedValue(0);
-  const cardPosition = useSharedValue(0);
+  const [statysReply, setStatusReply] = useState(0)
 
-  const { navigate } = useNavigation();
+  const shake = useSharedValue(0)
+  const scrollY = useSharedValue(0)
+  const cardPosition = useSharedValue(0)
 
-  const route = useRoute();
-  const { id } = route.params as Params;
+  const { navigate } = useNavigation()
+
+  const route = useRoute()
+  const { id } = route.params as Params
+
+  async function playSound(isCorrect: boolean) {
+    const file = isCorrect
+      ? require('../../assets/correct.mp3')
+      : require('../../assets/wrong.mp3')
+
+    const { sound } = await Audio.Sound.createAsync(file, {
+      shouldPlay: true,
+    })
+
+    await sound.setPositionAsync(0)
+    await sound.playAsync()
+  }
 
   function handleSkipConfirm() {
-    Alert.alert("Pular", "Deseja realmente pular a questão?", [
-      { text: "Sim", onPress: () => handleNextQuestion() },
-      { text: "Não", onPress: () => {} },
-    ]);
+    Alert.alert('Pular', 'Deseja realmente pular a questão?', [
+      { text: 'Sim', onPress: () => handleNextQuestion() },
+      { text: 'Não', onPress: () => {} },
+    ])
   }
 
   async function handleFinished() {
@@ -70,56 +87,70 @@ export function Quiz() {
       level: quiz.level,
       points,
       questions: quiz.questions.length,
-    });
+    })
 
-    navigate("finish", {
+    navigate('finish', {
       points: String(points),
       total: String(quiz.questions.length),
-    });
+    })
   }
 
   function handleNextQuestion() {
     if (currentQuestion < quiz.questions.length - 1) {
-      setCurrentQuestion((prevState) => prevState + 1);
+      setCurrentQuestion((prevState) => prevState + 1)
     } else {
-      handleFinished();
+      handleFinished()
     }
   }
 
   async function handleConfirm() {
     if (alternativeSelected === null) {
-      return handleSkipConfirm();
+      return handleSkipConfirm()
     }
 
     if (quiz.questions[currentQuestion].correct === alternativeSelected) {
-      setPoints((prevState) => prevState + 1);
+      await playSound(true)
+      setStatusReply(1)
+      setPoints((prevState) => prevState + 1)
+      handleNextQuestion()
     } else {
-      shakeAnimation();
+      await playSound(false)
+      setStatusReply(2)
+      shakeAnimation()
     }
 
-    setAlternativeSelected(null);
-
-    handleNextQuestion();
+    setAlternativeSelected(null)
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   function handleStop() {
-    Alert.alert("Parar", "Deseja parar agora?", [
+    Alert.alert('Parar', 'Deseja parar agora?', [
       {
-        text: "Não",
-        style: "cancel",
+        text: 'Não',
+        style: 'cancel',
       },
       {
-        text: "Sim",
-        style: "destructive",
-        onPress: () => navigate("home"),
+        text: 'Sim',
+        style: 'destructive',
+        onPress: () => navigate('home'),
       },
-    ]);
+    ])
 
-    return true;
+    return true
   }
 
-  function shakeAnimation() {
-    shake.value = withSequence(withTiming(3, { duration: 400 }), withTiming(0));
+  async function shakeAnimation() {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+
+    shake.value = withSequence(
+      withTiming(3, { duration: 400 }),
+      withTiming(0, undefined, (finished) => {
+        'worklet'
+        if (finished) {
+          runOnJS(handleNextQuestion)()
+        }
+      }),
+    )
   }
 
   const shakeStyledAnimated = useAnimatedStyle(() => {
@@ -129,27 +160,27 @@ export function Quiz() {
           translateX: interpolate(
             shake.value,
             [0, 0.5, 1, 1.5, 2, 2.5, 3],
-            [0, -15, 0, 15, 0, -15, 0]
+            [0, -15, 0, 15, 0, -15, 0],
           ),
         },
       ],
-    };
-  });
+    }
+  })
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll(event) {
-      scrollY.value = event.contentOffset.y;
+      scrollY.value = event.contentOffset.y
     },
-  });
+  })
 
   const fixedProgressBarStyles = useAnimatedStyle(() => {
     return {
-      position: "absolute",
+      position: 'absolute',
       zIndex: 1,
       paddingTop: 50,
       backgroundColor: THEME.COLORS.GREY_500,
-      width: "110%",
-      left: "-5%",
+      width: '110%',
+      left: '-5%',
       opacity: interpolate(scrollY.value, [50, 90], [0, 1], Extrapolate.CLAMP),
       transform: [
         {
@@ -157,38 +188,38 @@ export function Quiz() {
             scrollY.value,
             [50, 100],
             [-40, 0],
-            Extrapolate.CLAMP
+            Extrapolate.CLAMP,
           ),
         },
       ],
-    };
-  });
+    }
+  })
 
   const headerStyles = useAnimatedStyle(() => {
     return {
       opacity: interpolate(scrollY.value, [70, 90], [1, 0], Extrapolate.CLAMP),
-    };
-  });
+    }
+  })
 
   const onPan = Gesture.Pan()
     .activateAfterLongPress(200)
     .onUpdate((event) => {
-      const moveToLeft = event.translationX < 0;
+      const moveToLeft = event.translationX < 0
 
       if (moveToLeft) {
-        cardPosition.value = event.translationX;
+        cardPosition.value = event.translationX
       }
     })
     .onEnd((event) => {
       if (event.translationX < CARD_SKIP_AREA) {
-        runOnJS(handleSkipConfirm)();
+        runOnJS(handleSkipConfirm)()
       }
 
-      cardPosition.value = withTiming(0);
-    });
+      cardPosition.value = withTiming(0)
+    })
 
   const dragStyles = useAnimatedStyle(() => {
-    const rotateZ = cardPosition.value / CARD_INCLINATION;
+    const rotateZ = cardPosition.value / CARD_INCLINATION
 
     return {
       transform: [
@@ -199,21 +230,34 @@ export function Quiz() {
           rotateZ: `${rotateZ}deg`,
         },
       ],
-    };
-  });
+    }
+  })
 
   useEffect(() => {
-    const quizSelected = QUIZ.filter((item) => item.id === id)[0];
-    setQuiz(quizSelected);
-    setIsLoading(false);
-  }, []);
+    const quizSelected = QUIZ.filter((item) => item.id === id)[0]
+    setQuiz(quizSelected)
+    setIsLoading(false)
+  }, [id])
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleStop,
+    )
+
+    return () => {
+      backHandler.remove()
+    }
+  }, [handleStop])
 
   if (isLoading) {
-    return <Loading />;
+    return <Loading />
   }
 
   return (
     <View style={styles.container}>
+      <OverlayFeedback status={statysReply} />
+
       <Animated.View style={fixedProgressBarStyles}>
         <Text style={styles.title}>{quiz.title}</Text>
 
@@ -244,6 +288,7 @@ export function Quiz() {
               question={quiz.questions[currentQuestion]}
               alternativeSelected={alternativeSelected}
               setAlternativeSelected={setAlternativeSelected}
+              onUnmount={() => setStatusReply(0)}
             />
           </Animated.View>
         </GestureDetector>
@@ -254,5 +299,5 @@ export function Quiz() {
         </View>
       </Animated.ScrollView>
     </View>
-  );
+  )
 }

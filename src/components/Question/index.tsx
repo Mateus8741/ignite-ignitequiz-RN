@@ -1,26 +1,28 @@
-import { View, Text, Dimensions } from "react-native";
+import { Text, Dimensions } from 'react-native'
 
-import { Option } from "../Option";
-import { styles } from "./styles";
-import Animated, { Keyframe } from "react-native-reanimated";
+import { Option } from '../Option'
+import { styles } from './styles'
+import Animated, { Keyframe, runOnJS } from 'react-native-reanimated'
 
 type QuestionProps = {
-  title: string;
-  alternatives: string[];
-};
+  title: string
+  alternatives: string[]
+}
 
 type Props = {
-  question: QuestionProps;
-  alternativeSelected?: number | null;
-  setAlternativeSelected?: (value: number) => void;
-};
+  question: QuestionProps
+  alternativeSelected?: number | null
+  setAlternativeSelected?: (value: number) => void
+  onUnmount: () => void
+}
 
-const SCREN_WIDTH = Dimensions.get("window").width;
+const SCREN_WIDTH = Dimensions.get('window').width
 
 export function Question({
   question,
   alternativeSelected,
   setAlternativeSelected,
+  onUnmount,
 }: Props) {
   const enteringKeyframe = new Keyframe({
     0: {
@@ -30,7 +32,7 @@ export function Question({
           translateX: SCREN_WIDTH,
         },
         {
-          rotate: "90deg",
+          rotate: '90deg',
         },
       ],
     },
@@ -44,11 +46,11 @@ export function Question({
           translateX: 0,
         },
         {
-          rotate: "0deg",
+          rotate: '0deg',
         },
       ],
     },
-  });
+  })
 
   const exitingKeyframe = new Keyframe({
     from: {
@@ -58,7 +60,7 @@ export function Question({
           translateX: 0,
         },
         {
-          rotate: "0deg",
+          rotate: '0deg',
         },
       ],
     },
@@ -69,16 +71,21 @@ export function Question({
           translateX: SCREN_WIDTH * -1,
         },
         {
-          rotate: "-90deg",
+          rotate: '-90deg',
         },
       ],
     },
-  });
+  })
 
   return (
     <Animated.View
       entering={enteringKeyframe}
-      exiting={exitingKeyframe}
+      exiting={exitingKeyframe.withCallback((finished) => {
+        'worklet'
+        if (finished) {
+          runOnJS(onUnmount)()
+        }
+      })}
       style={styles.container}
     >
       <Text style={styles.title}>{question.title}</Text>
@@ -94,5 +101,5 @@ export function Question({
         />
       ))}
     </Animated.View>
-  );
+  )
 }
